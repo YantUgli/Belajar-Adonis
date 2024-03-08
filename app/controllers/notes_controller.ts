@@ -1,5 +1,7 @@
 import Note from '#models/note'
+import { createNotesValidator } from '#validators/note'
 import type { HttpContext } from '@adonisjs/core/http'
+import vine, { errors } from '@vinejs/vine'
 
 export default class NotesController {
   /**
@@ -25,17 +27,30 @@ export default class NotesController {
    * Handle form submission for the create action
    */
   async store({ request, response }: HttpContext) {
-    const data = request.body()
-    // const notes = await data.create(request)
-    const notes = await Note.create({
-      judul: data.judul,
-      isi: data.isi,
-    })
+    try {
+      // belum di validasi
+      const data = request.body()
+      // sudah di validasi
+      const validator = vine.compile(createNotesValidator)
+      const validateData = await validator.validate(data)
+      // const notes = await data.create(request)
+      const notes = await Note.create({
+        judul: validateData.judul,
+        isi: validateData.isi,
+      })
 
-    return response.ok({
-      messaage: 'Berhasil buat notes',
-      data: notes,
-    })
+      return response.ok({
+        messaage: 'Berhasil buat notes',
+        data: notes,
+      })
+    } catch (error) {
+      if (error instanceof errors.E_VALIDATION_ERROR) {
+        return response.badRequest({
+          message: error.messages,
+        })
+      }
+      return response.badRequest("Something wen't wrong")
+    }
   }
 
   /**
@@ -60,15 +75,27 @@ export default class NotesController {
    * Handle form submission for the edit action
    */
   async update({ request, params, response }: HttpContext) {
-    const data = request.body()
-    var notes = await Note.findByOrFail('id', params.id)
+    try {
+      const data = request.body()
+      // Validasi
+      const validator = vine.compile(createNotesValidator)
+      const validateData = await validator.validate(data)
+      var notes = await Note.findByOrFail('id', params.id)
+  
+      notes.merge(validateData).save()
+  
+      return response.ok({
+        data: notes,
+        message: `berhasil update notes ke ${params.id}`,
+      })
+      
+    } catch (error) {
+      if (error instanceof errors.E_VALIDATION_ERROR) {
+        return response.badRequest({ messages: error.messages })
+      }
 
-    notes.merge(data).save()
-
-    return response.ok({
-      data: notes,
-      message: `berhasil update notes ke ${params.id}`,
-    })
+      return response.badRequest({ messages: "Something wen't wrong" })
+    }
   }
 
   /**
